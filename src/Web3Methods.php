@@ -16,6 +16,7 @@ use Ethereum\DataType\EthQ;
 use Ethereum\DataType\EthB;
 use Ethereum\DataType\EthD20;
 use Ethereum\DataType\EthBlockParam;
+use Ethereum\DataType\EthPassphrase;
 use Ethereum\DataType\EthD32;
 use Ethereum\DataType\SendTransaction;
 use Ethereum\DataType\CallTransaction;
@@ -104,6 +105,10 @@ trait Web3Methods {
 	public function personal_sign(EthD20 $arg1, EthD $arg2, EthS $arg3) {
 		return $this->__call(__FUNCTION__, func_get_args());
 	}
+
+    public function personal_sendTransaction(SendTransaction $arg1, EthPassphrase $arg2) {
+        return $this->__call(__FUNCTION__, func_get_args());
+    }
 
 	/**
 	 * Generated method personal_ecRecover().

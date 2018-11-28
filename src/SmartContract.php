@@ -5,7 +5,11 @@ namespace Ethereum;
 use Ethereum\DataType\CallTransaction;
 use Ethereum\DataType\EthBlockParam;
 use Ethereum\DataType\EthD20;
+use Ethereum\DataType\EthPassphrase;
+use Ethereum\DataType\EthQ;
+use Ethereum\DataType\EthS;
 use Ethereum\DataType\FilterChange;
+use Ethereum\DataType\SendTransaction;
 use \Ethereum\EmittedEvent;
 
 /**
@@ -94,6 +98,26 @@ class SmartContract
         return $this->abi->decodeMethod($method, $rawReturn);
     }
 
+    public function sendTransaction(string $method, array $args, $from, $passphrase, $gas=7000000, $gasPrice=10)
+    {
+        $call = new SendTransaction(
+            $from,
+            $this->abi->encodeFunction($method, $args),
+            new EthD20($this->contractAddress),
+
+//            new EthQ($gas),
+//            new EthQ($gasPrice),
+            null,
+            null,
+            null
+        );
+
+        // @todo Maybe we need a smarter default block param handling here.
+        // Currently we can only call latest Block.
+        $rawReturn = $this->eth->personal_sendTransaction($call, new EthPassphrase($passphrase));
+//        $rawReturn = $this->eth->eth_sendTransaction($call);
+        return $this->abi->decodeMethod($method, $rawReturn);
+    }
 
     /**
      * @param \Ethereum\DataType\FilterChange $filterChange
