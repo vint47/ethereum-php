@@ -2,6 +2,7 @@
 
 namespace Ethereum;
 
+use Ethereum\DataType\EthArray;
 use Ethereum\DataType\EthD;
 use Ethereum\DataType\EthDataType;
 use Ethereum\DataType\EthQ;
@@ -37,38 +38,51 @@ class Abi extends EthereumStatic
     public function encodeFunction(string $methodName, array $values)
     {
         $m = $this->getParamDefinition($methodName);
-        $isArray = (count($m->inputs) == 1 && ends_with($m->inputs[0]->type, '[]'));
-        if (count($m->inputs) !== count($values) && !$isArray) {
+        if (count($m->inputs) !== count($values))
+        {
             throw new \InvalidArgumentException('Expected ' . count($m->inputs) . ' params but got ' . count($values));
         }
         // [METHOD 4bytes] + [PARAMS]
         $params = $this->getSignature($m);
-        if ($isArray) {
-            $param = $m->inputs[0];
-            $typeName = str_before($param->type, '[]');
-            $prefix = new EthQ(32);
-            $length = new EthQ(count($values));
 
-            $validAbiType = self::convertByAbi('uint256', $prefix);
-            $params       .= EthereumStatic::removeHexPrefix($validAbiType->encodedHexVal());
-$validAbiType = self::convertByAbi('uint256', $length);
-            $params       .= EthereumStatic::removeHexPrefix($validAbiType->encodedHexVal());
-
-            foreach ($values as $i => $val)
-            {
-                $validAbiType = self::convertByAbi($typeName, $val);
-                $params       .= EthereumStatic::removeHexPrefix($validAbiType->encodedHexVal());
-            }
-        }
-        else
+        $dynamicParamsLength = count($values) * 64 / 2;
+        $dynamicData         = '';
+        foreach ($values as $i => $val)
         {
-            foreach ($values as $i => $val)
+            $expectedType = $m->inputs[$i]->type;
+            if ($val instanceof EthArray)
             {
-                $expectedType = $m->inputs[$i]->type;
+                $validAbiType = $val;
+            }
+            else
+            {
                 $validAbiType = self::convertByAbi($expectedType, $val);
-                $params       .= EthereumStatic::removeHexPrefix($validAbiType->encodedHexVal());
+            }
+            $encodedHexVal = EthereumStatic::removeHexPrefix($validAbiType->encodedHexVal());
+
+            if ($validAbiType->getDataLengthType() == 'array')
+            {
+                $possition           = new EthQ($dynamicParamsLength);
+                $dynamicParamsLength += strlen($encodedHexVal) / 2;
+                $params              .= EthereumStatic::removeHexPrefix($possition->hexVal());
+                $dynamicData         .= $encodedHexVal;
+            }
+            elseif ($validAbiType->getDataLengthType() == 'dynamic')
+            {
+                $encodedHexVal = substr($encodedHexVal, 64);
+                $possition     = new EthQ($dynamicParamsLength);
+
+                $dynamicParamsLength += strlen($encodedHexVal) / 2;
+                $params              .= EthereumStatic::removeHexPrefix($possition->hexVal());
+                $dynamicData         .= $encodedHexVal;
+            }
+            else
+            {
+                $params .= $encodedHexVal;
             }
         }
+        $params .= $dynamicData;
+
         return new EthD($params);
     }
 
@@ -110,100 +124,70 @@ $validAbiType = self::convertByAbi('uint256', $length);
      */
     public static function decode(array $params, string $msgData)
     {
-        if (self::hasHexPrefix($msgData) || !ctype_xdigit($msgData)) {
+        if (self::hasHexPrefix($msgData) || !ctype_xdigit($msgData))
+        {
             throw new \Exception('msgData must be a unprefixed hex value.');
         }
         $return = [];
-        $pos = 0;
+        $pos    = 0;
 
-        //laravel helper
-        if (count($params) == 1 && ends_with($params[0]->type, '[]')) {
-            // only for uint and address
-            $pos += 64;
-            $param = $params[0];
-            $thisValue  = substr($msgData, $pos, 64);
 
-            $countValues = new EthQ($thisValue);
-            $pos += 64;
-
-            for ($p = 0; $p < $countValues->val(); $p++)
-            {
-                /** @var EthD $class EthD or a derived class. */
-                $class = EthD::getClassByAbi($param->type);
-
-                $lengthType = $class::getdataLengthType($param->type);
-
-                if ($lengthType === 'static')
-                {
-                    // Fixed length type.
-                    $thisValue  = substr($msgData, $pos, 64);
-                    $return[$p] = new $class(self::ensureHexPrefix($thisValue), ['abi' => $param->type]);
-                }
-                elseif ($lengthType === 'dynamic')
-                {
-                    // Dynamic length type.
-                    $offsetInChars = 2 * Rlp::getByteValueAtOffsetPos($msgData, $pos);
-                    $rlpDecoded    = Rlp::decode(substr($msgData, $offsetInChars));
-
-                    if (count($rlpDecoded) === 1)
-                    {
-                        $return[$p] = new $class(self::ensureHexPrefix($rlpDecoded[0]->get()), ['abi' => $param->type]);
-                    }
-                    else
-                    {
-                        foreach ($rlpDecoded as $rlpItem)
-                        {
-                            $return[$p][] = new $class(self::ensureHexPrefix($rlpItem->get()), ['abi' => $param->type]);
-                        }
-                    }
-                }
-                else
-                {
-                    throw new \Exception('Length type must be "dynamic" or "static".');
-                }
-                $pos += 64;
-            }
-        }
-        else
+        foreach ($params as $p => $param)
         {
-            foreach ($params as $p => $param)
+            /** @var EthD $class EthD or a derived class. */
+            $class      = EthD::getClassByAbi($param->type);
+            $lengthType = $class::getdataLengthType($param->type);
+
+            if ($lengthType === 'static')
             {
-                /** @var EthD $class EthD or a derived class. */
-                $class = EthD::getClassByAbi($param->type);
+                // Fixed length type.
+                $thisValue  = substr($msgData, $pos, 64);
+                $return[$p] = new $class(self::ensureHexPrefix($thisValue), ['abi' => $param->type]);
+            }
+            elseif ($lengthType === 'dynamic')
+            {
 
-                $lengthType = $class::getdataLengthType($param->type);
+                // Dynamic length type.
+                $offsetInChars = 2 * Rlp::getByteValueAtOffsetPos($msgData, $pos);
 
-                if ($lengthType === 'static')
+                $rlpDecoded = Rlp::decode(substr($msgData, $offsetInChars));
+                if (count($rlpDecoded) === 1)
                 {
-                    // Fixed length type.
-                    $thisValue  = substr($msgData, $pos, 64);
-                    $return[$p] = new $class(self::ensureHexPrefix($thisValue), ['abi' => $param->type]);
-                }
-                elseif ($lengthType === 'dynamic')
-                {
-                    // Dynamic length type.
-                    $offsetInChars = 2 * Rlp::getByteValueAtOffsetPos($msgData, $pos);
-                    $rlpDecoded    = Rlp::decode(substr($msgData, $offsetInChars));
-
-                    if (count($rlpDecoded) === 1)
-                    {
-                        $return[$p] = new $class(self::ensureHexPrefix($rlpDecoded[0]->get()), ['abi' => $param->type]);
-                    }
-                    else
-                    {
-                        foreach ($rlpDecoded as $rlpItem)
-                        {
-                            $return[$p][] = new $class(self::ensureHexPrefix($rlpItem->get()), ['abi' => $param->type]);
-                        }
-                    }
+                    $return[$p] = new $class(self::ensureHexPrefix($rlpDecoded[0]->get()), ['abi' => $param->type]);
                 }
                 else
                 {
-                    throw new \Exception('Length type must be "dynamic" or "static".');
+                    foreach ($rlpDecoded as $rlpItem)
+                    {
+                        $return[$p][] = new $class(self::ensureHexPrefix($rlpItem->get()), ['abi' => $param->type]);
+                    }
                 }
-                $pos += 64;
             }
+            elseif ($lengthType === 'array')
+            {
+
+                // Dynamic length type.
+                $offsetInChars = 2 * Rlp::getByteValueAtOffsetPos($msgData, $pos);
+
+                $arrayData   = substr($msgData, $offsetInChars + 64);
+                $arrayLength = hexdec(substr($msgData, $offsetInChars, 64));
+
+                $arrayParam = new $class([]);
+                for ($i = 0; $i < $arrayLength; $i++)
+                {
+                    $thisValue = substr($arrayData, $i * 64, 64);
+                    $arrayParam->addValue(self::ensureHexPrefix($thisValue));
+                }
+                $return[$p] = $arrayParam;
+
+            }
+            else
+            {
+                throw new \Exception('Length type must be "dynamic" or "static".');
+            }
+            $pos += 64;
         }
+
         return $return;
     }
 

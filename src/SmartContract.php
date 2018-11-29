@@ -98,15 +98,15 @@ class SmartContract
         return $this->abi->decodeMethod($method, $rawReturn);
     }
 
-    public function sendTransaction(string $method, array $args, $from, $passphrase, $gas=7000000, $gasPrice=10)
+    public function sendTransaction(string $method, array $args, $from, $passphrase, $gas=4700000, $gasPrice=25000000000)
     {
         $call = new SendTransaction(
             $from,
             $this->abi->encodeFunction($method, $args),
             new EthD20($this->contractAddress),
 
-//            new EthQ($gas),
-//            new EthQ($gasPrice),
+            new EthQ($gas),
+            new EthQ($gasPrice),
             null,
             null,
             null

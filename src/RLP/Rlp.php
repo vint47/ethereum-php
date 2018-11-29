@@ -313,7 +313,8 @@ class Rlp extends EthereumStatic
         if (strlen($msgData) < $pos + 64) {
             throw new \Exception('Not ennough data');
         }
-        $lastByte = substr($msgData, $pos + 62, 2);
+        $lastByte = substr($msgData, $pos, 64);
+
         return self::byteLength($lastByte);
     }
 

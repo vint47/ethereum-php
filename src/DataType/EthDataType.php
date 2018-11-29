@@ -52,10 +52,11 @@ abstract class EthDataType extends EthereumStatic implements EthDataTypeInterfac
     private const ABI_MAP = [
         // The following elementary types exist:
         'uint' => 'EthQ',
+        'uint256[]' => 'EthArrayInt',
         'int' => 'EthQ',
 
         'address' => 'EthD32Left',
-        'address[]' => 'EthD32Left',
+        'address[]' => 'EthArrayAddress',
 //        'address' => 'EthD20',
         // = uint 160?
         'bool' => 'EthB',
