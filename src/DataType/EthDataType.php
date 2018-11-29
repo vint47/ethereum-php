@@ -55,6 +55,7 @@ abstract class EthDataType extends EthereumStatic implements EthDataTypeInterfac
         'int' => 'EthQ',
 
         'address' => 'EthD32Left',
+        'address[]' => 'EthD32Left',
 //        'address' => 'EthD20',
         // = uint 160?
         'bool' => 'EthB',
@@ -143,7 +144,7 @@ abstract class EthDataType extends EthereumStatic implements EthDataTypeInterfac
 
         // Int types (int*, uint*)
         $int = [];
-        preg_match("/^(?'type'[u]?int)([\d]*)$/", $abiType, $int);
+        preg_match("/^(?'type'[u]?int)([\d]*)([\[\]]*)$/", $abiType, $int);
         // @see https://regex101.com/r/7JHrKG/1
         if ($int && isset(self::ABI_MAP[$int['type']])) {
             return $ns . self::ABI_MAP[$int['type']];

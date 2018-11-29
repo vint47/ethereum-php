@@ -226,7 +226,7 @@ class EthQ extends EthD
         $matches = [];
         $valid = null;
         // See: https://regex101.com/r/3XYumB/1
-        if (preg_match('/^(u?int)(\d{1,3})$/', self::abiAliases($abi),
+        if (preg_match('/^(u?int)(\d{1,3})([\[\]]*)$/', self::abiAliases($abi),
           $matches)) {
             return (object)[
               'abi' => $abi,
